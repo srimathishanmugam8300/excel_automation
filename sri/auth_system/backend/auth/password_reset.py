@@ -26,32 +26,46 @@ async def forgot_password(request: ForgotPasswordRequest):
 
 @router.post("/reset-password")
 async def reset_password(request: ResetPasswordRequest):
-    reset_entry = queries.get_reset_token(request.token)
-    if not reset_entry:
-        raise HTTPException(status_code=400, detail="Invalid token")
-    
-    if reset_entry['is_used']:
-        raise HTTPException(status_code=400, detail="Token already used")
-        
-    # Check expiry (SQLite stores timestamps as strings usually, need parsing if not handled by adapter)
-    # Assuming standard ISO format or similar from SQLite adapter
-    expiry_str = reset_entry['expiry']
-    # Simple string comparison might work if ISO format, but better to parse
-    # For MVP relying on SQLite string comparison or simple parsing
     try:
-        expiry_dt = datetime.fromisoformat(expiry_str)
-    except ValueError:
-        # Fallback if format is different, e.g. "2023-01-01 12:00:00.000000"
-        expiry_dt = datetime.strptime(expiry_str, "%Y-%m-%d %H:%M:%S.%f")
+        reset_entry = queries.get_reset_token(request.token)
+        if not reset_entry:
+            raise HTTPException(status_code=400, detail="Invalid token")
+        
+        if reset_entry['is_used']:
+            raise HTTPException(status_code=409, detail="Token already used")
+            
+        expiry_str = reset_entry['expiry']
+        try:
+            expiry_dt = datetime.strptime(expiry_str, "%Y-%m-%d %H:%M:%S.%f")
+        except ValueError:
+            try:
+                expiry_dt = datetime.strptime(expiry_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                try:
+                    expiry_dt = datetime.fromisoformat(expiry_str)
+                except ValueError:
+                    print(f"Date parsing failed for: {expiry_str}")
+                    raise HTTPException(status_code=500, detail="Internal Server Error: Date parsing failed")
 
-    if datetime.utcnow() > expiry_dt:
-        raise HTTPException(status_code=400, detail="Token expired")
-    
-    new_hashed_password = hashing.get_password_hash(request.new_password)
-    queries.update_user_password(reset_entry['user_id'], new_hashed_password)
-    queries.mark_token_used(request.token)
-    
-    return {"message": "Password reset successfully"}
+        if datetime.utcnow() > expiry_dt:
+            raise HTTPException(status_code=401, detail="Token expired")
+        
+        new_hashed_password = hashing.hash_password(request.new_password)
+        
+        # Update user: set password, clear first_login, activate account
+        queries.update_user_for_reset(reset_entry['user_id'], new_hashed_password)
+        
+        # Mark token as used
+        queries.mark_token_used(request.token)
+        
+        return {"message": "Password reset successfully"}
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Reset password error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
 
 # --- Admin Reset User Password Flow ---
 
@@ -62,8 +76,9 @@ async def admin_reset_user_password(request: AdminResetUserPasswordRequest, admi
     # Prompt says: "System must: 1. generate new temporary password"
     
     temp_password = tokens.generate_reset_token()[:12] # Simple random string
-    hashed_temp_password = hashing.get_password_hash(temp_password)
+    hashed_temp_password = hashing.hash_password(temp_password)
     
     queries.admin_reset_user_password(request.user_id, hashed_temp_password)
     
     return {"message": "User password reset successfully", "temporary_password": temp_password}
+

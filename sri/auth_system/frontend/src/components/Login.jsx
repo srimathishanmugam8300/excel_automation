@@ -12,13 +12,33 @@ function Login({ role }) {
     e.preventDefault();
     setError('');
     
-    const formData = new FormData();
-    formData.append('username', username);
-    formData.append('password', password);
-
     try {
-      const endpoint = role === 'admin' ? '/admin/login' : '/user/login';
-      const response = await api.post(endpoint, formData);
+      let response;
+      if (role === 'admin') {
+        // Admin login requires x-www-form-urlencoded
+        const formData = new URLSearchParams();
+        formData.append('username', username);
+        formData.append('password', password);
+        
+        response = await api.post('/admin/login', formData, {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+      } else {
+        // User login uses JSON (default)
+        response = await api.post(
+            "/user/login",
+            new URLSearchParams({
+              username: username,
+              password: password
+            }),
+            {
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
+              }
+            }
+          );
+
+      }
       
       localStorage.setItem('token', response.data.access_token);
       localStorage.setItem('role', response.data.role);
@@ -31,6 +51,7 @@ function Login({ role }) {
         navigate('/user/dashboard');
       }
     } catch (err) {
+      console.error("Login error:", err);
       setError('Invalid credentials');
     }
   };

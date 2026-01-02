@@ -35,13 +35,15 @@ async def create_user(user: CreateUserRequest, admin: str = Depends(get_current_
     if existing_user:
         raise HTTPException(status_code=400, detail="User ID already exists")
     
-    hashed_password = hashing.get_password_hash(user.password)
+    # Use hash_password as per requirements
+    hashed_password = hashing.hash_password(user.password)
     success = queries.create_user(user.user_id, user.email, hashed_password, admin)
     
     if not success:
         raise HTTPException(status_code=500, detail="Failed to create user")
         
     return {"message": "User created successfully"}
+
 
 @router.get("/users")
 async def get_users(admin: str = Depends(get_current_admin)):

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import TriggerRulesPanel from './dashboard/TriggerRulesPanel';
+import CompliancePanel from './dashboard/CompliancePanel';
+import ActivityLogPanel from './dashboard/ActivityLogPanel';
+import MemoPanel from './dashboard/MemoPanel';
 
 function AdminDashboard() {
   const [users, setUsers] = useState([]);
-  const [newUser, setNewUser] = useState({ user_id: '', email: '', password: '' });
-  const [message, setMessage] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -18,18 +20,6 @@ function AdminDashboard() {
       setUsers(response.data);
     } catch (err) {
       if (err.response && err.response.status === 401) navigate('/admin/login');
-    }
-  };
-
-  const handleCreateUser = async (e) => {
-    e.preventDefault();
-    try {
-      await api.post('/admin/create-user', newUser);
-      setMessage('User created successfully');
-      setNewUser({ user_id: '', email: '', password: '' });
-      fetchUsers();
-    } catch (err) {
-      setMessage('Error creating user: ' + (err.response?.data?.detail || err.message));
     }
   };
 
@@ -51,68 +41,65 @@ function AdminDashboard() {
   };
 
   return (
-    <div className="dashboard-container">
-      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+    <div className="dashboard-container" style={{maxWidth: '1200px'}}>
+      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem'}}>
         <h1>Admin Dashboard</h1>
         <button onClick={handleLogout} className="secondary">Logout</button>
       </div>
 
-      <div style={{marginTop: '2rem'}}>
-        <h2>Create User</h2>
-        {message && <div className={message.includes('Error') ? 'error' : 'success'}>{message}</div>}
-        <form onSubmit={handleCreateUser} style={{maxWidth: '500px', margin: '0 auto'}}>
-          <input
-            type="text"
-            placeholder="User ID"
-            value={newUser.user_id}
-            onChange={(e) => setNewUser({...newUser, user_id: e.target.value})}
-            required
-          />
-          <input
-            type="email"
-            placeholder="Email (Optional)"
-            value={newUser.email}
-            onChange={(e) => setNewUser({...newUser, email: e.target.value})}
-          />
-          <input
-            type="password"
-            placeholder="Initial Password"
-            value={newUser.password}
-            onChange={(e) => setNewUser({...newUser, password: e.target.value})}
-            required
-          />
-          <button type="submit">Create User</button>
-        </form>
+      {/* Action Bar */}
+      <div style={{marginBottom: '2rem', display: 'flex', gap: '1rem'}}>
+        <Link to="/admin/create-user">
+          <button>Create New User</button>
+        </Link>
       </div>
 
-      <div style={{marginTop: '3rem'}}>
-        <h2>User List</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>User ID</th>
-              <th>Email</th>
-              <th>Status</th>
-              <th>First Login?</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map(user => (
-              <tr key={user.user_id}>
-                <td>{user.user_id}</td>
-                <td>{user.email}</td>
-                <td>{user.is_active ? 'Active' : 'Inactive'}</td>
-                <td>{user.is_first_login ? 'Yes' : 'No'}</td>
-                <td>
-                  <button onClick={() => handleResetPassword(user.user_id)} className="secondary" style={{padding: '0.5rem'}}>
-                    Reset Password
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Dashboard Grid Layout */}
+      <div className="dashboard-grid">
+        {/* Left Column: Rules & Compliance */}
+        <div className="dashboard-column">
+          <TriggerRulesPanel />
+          <CompliancePanel />
+          <MemoPanel />
+        </div>
+
+        {/* Right Column: Activity & Users */}
+        <div className="dashboard-column">
+          <ActivityLogPanel />
+          
+          <div className="card">
+            <h3>Users Overview</h3>
+            <div style={{overflowX: 'auto'}}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>User ID</th>
+                    <th>Status</th>
+                    <th>First Login?</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map(user => (
+                    <tr key={user.user_id}>
+                      <td>{user.user_id}</td>
+                      <td>
+                        <span className={`status-dot ${user.is_active ? 'active' : 'inactive'}`}></span>
+                        {user.is_active ? 'Active' : 'Inactive'}
+                      </td>
+                      <td>{user.is_first_login ? 'Yes' : 'No'}</td>
+                      <td>
+                        <button onClick={() => handleResetPassword(user.user_id)} className="secondary small">
+                          Reset
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
